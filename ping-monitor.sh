@@ -112,8 +112,7 @@ write_log() {
 
 # Queries the Mac over SSH to check if the lid is closed (returns Yes/No).
 check_mac_lid() {
-  "$SSH_BIN" "${SSH_COMMON_OPTS[@]}" "$SSH_USER@$TARGET_MAC" \
-    'ioreg -r -k AppleClamshellState -d 4 | grep AppleClamshellState | cut -d= -f2' 2>/dev/null | tr -d ' '
+  "$SSH_BIN" "${SSH_COMMON_OPTS[@]}" "$SSH_USER@$TARGET_MAC" "check_lid"
 }
 
 # Sends an HTTP POST request to the Automate app on the Android phone.
@@ -123,10 +122,9 @@ trigger_phone_failover() {
 }
 
 # Connects the Mac to the Android phone's Wi-Fi hotspot over SSH.
-# Retrieves the password from the macOS Keychain.
+# This uses the restricted SSH helper script on the Mac side.
 switch_mac_to_hotspot() {
-  "$SSH_BIN" "${SSH_COMMON_OPTS[@]}" "$SSH_USER@$TARGET_MAC" \
-    "HOTSPOT_PASSWORD=\$(security find-generic-password -a 'hotspot' -s 'ping-monitor-hotspot' -w); networksetup -setairportnetwork en0 \"$HOTSPOT_SSID\" \"\$HOTSPOT_PASSWORD\"" 2>&1
+  "$SSH_BIN" "${SSH_COMMON_OPTS[@]}" "$SSH_USER@$TARGET_MAC" "switch_wifi" 2>&1
 }
 
 while true; do

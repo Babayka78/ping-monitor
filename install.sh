@@ -22,7 +22,6 @@ TARGET_MAIN=""
 TARGET_SIDE=""
 TARGET_MAC=""
 HOTSPOT_SSID=""
-HOTSPOT_PASSWORD=""
 AUTOMATE_HOST=""
 AUTOMATE_PORT=""
 AUTOMATE_ENDPOINT=""
@@ -169,9 +168,8 @@ detect_defaults() {
     TARGET_SIDE="${TARGET_SIDE:-192.168.100.79}"
     TARGET_MAC="${TARGET_MAC:-192.168.0.173}"
     SSH_USER="${SSH_USER:-$REAL_USER}"
-    SSH_KEY_PATH="${SSH_KEY_PATH:-$REAL_HOME/.ssh/id_ed25519_mac}"
+    SSH_KEY_PATH="${SSH_KEY_PATH:-$REAL_HOME/.ssh/id_ed25519_ping_monitor}"
     HOTSPOT_SSID="${HOTSPOT_SSID:-YourHotspotSSID}"
-    HOTSPOT_PASSWORD="${HOTSPOT_PASSWORD:-YourHotspotPass}"
     AUTOMATE_HOST="${AUTOMATE_HOST:-192.168.0.65}"
     AUTOMATE_PORT="${AUTOMATE_PORT:-7801}"
     AUTOMATE_ENDPOINT="${AUTOMATE_ENDPOINT:-failover_$(random_suffix)}"
@@ -202,7 +200,6 @@ prompt_config() {
     SSH_USER="$(prompt_value 'Mac SSH Username (SSH_USER)' "$SSH_USER")"
     SSH_KEY_PATH="$(prompt_value 'SSH Key Path (SSH_KEY_PATH)' "$SSH_KEY_PATH")"
     HOTSPOT_SSID="$(prompt_value 'Phone Hotspot SSID (HOTSPOT_SSID)' "$HOTSPOT_SSID")"
-    HOTSPOT_PASSWORD="$(prompt_value 'Phone Hotspot Password (HOTSPOT_PASSWORD)' "$HOTSPOT_PASSWORD")"
     AUTOMATE_HOST="$(prompt_value 'Android Phone IP (AUTOMATE_HOST)' "$AUTOMATE_HOST")"
     AUTOMATE_PORT="$(prompt_value 'Automate HTTP Port (AUTOMATE_PORT)' "$AUTOMATE_PORT")"
     AUTOMATE_ENDPOINT="$(prompt_value 'Automate Endpoint (AUTOMATE_ENDPOINT)' "$AUTOMATE_ENDPOINT")"
@@ -282,19 +279,52 @@ setup_ssh_key_for_mac() {
     fi
 }
 
-# Saves the hotspot password to the macOS Keychain
-save_hotspot_password_to_mac() {
-    log "Saving Hotspot password to Mac Keychain..."
-    local safe_pass="${HOTSPOT_PASSWORD//\'/\'\\\'\'}"
+# Creates the helper environment on the Mac and restricts the SSH key
+deploy_mac_helper() {
+    log "Deploying restricted SSH helper to Mac..."
     
-    # Delete existing entry first to ensure a clean overwrite
-    sudo -u "$REAL_USER" ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" "$SSH_USER@$TARGET_MAC" "security delete-generic-password -a 'hotspot' -s 'ping-monitor-hotspot'" >/dev/null 2>&1 || true
-
-    if sudo -u "$REAL_USER" ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" "$SSH_USER@$TARGET_MAC" "security add-generic-password -a 'hotspot' -s 'ping-monitor-hotspot' -w '${safe_pass}'" >/dev/null 2>&1; then
-        log "Hotspot password successfully saved to Mac Keychain."
+    local safe_ssid="${HOTSPOT_SSID//\'/\'\\\'\'}"
+    
+    # 1. Create directory and .env file on the Mac
+    if sudo -u "$REAL_USER" ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" "$SSH_USER@$TARGET_MAC" "
+        mkdir -p ~/.ping-monitor
+        cat > ~/.ping-monitor/config.env <<'EOF'
+HOTSPOT_SSID='${safe_ssid}'
+EOF
+        chmod 600 ~/.ping-monitor/config.env
+    " >/dev/null 2>&1; then
+        log "Mac environment configuration created successfully."
     else
-        warn "Failed to save Hotspot password to Mac Keychain. Ensure SSH access works and Keychain is unlocked."
+        warn "Failed to configure Mac environment. Ensure SSH access works."
+        return 1
     fi
+
+    # 2. Copy the helper script
+    if sudo -u "$REAL_USER" scp -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" "$SCRIPT_DIR/ping-monitor-helper.sh" "$SSH_USER@$TARGET_MAC:~/.ping-monitor/ping-monitor-helper.sh" >/dev/null 2>&1; then
+        sudo -u "$REAL_USER" ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" "$SSH_USER@$TARGET_MAC" "chmod +x ~/.ping-monitor/ping-monitor-helper.sh"
+        log "Helper script deployed."
+    else
+        warn "Failed to copy helper script to Mac."
+        return 1
+    fi
+
+    # 3. Restrict the authorized_keys
+    log "Restricting SSH key in Mac's authorized_keys..."
+    local pubkey_content
+    pubkey_content="$(cat "${SSH_KEY_PATH}.pub")"
+    
+    sudo -u "$REAL_USER" ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" "$SSH_USER@$TARGET_MAC" "
+        KEY_CONTENT=\"${pubkey_content}\"
+        RESTRICTION=\"command=\\\"/Users/$SSH_USER/.ping-monitor/ping-monitor-helper.sh\\\",no-pty,no-port-forwarding,no-x11-forwarding,no-agent-forwarding\"
+        
+        # Remove the key if it already exists to avoid duplicates
+        grep -v \"\$KEY_CONTENT\" ~/.ssh/authorized_keys > ~/.ssh/authorized_keys.tmp
+        # Add the restricted version
+        echo \"\$RESTRICTION \$KEY_CONTENT\" >> ~/.ssh/authorized_keys.tmp
+        mv ~/.ssh/authorized_keys.tmp ~/.ssh/authorized_keys
+        chmod 600 ~/.ssh/authorized_keys
+    " >/dev/null 2>&1
+    log "SSH key restricted successfully on the Mac."
 }
 
 # Saves the final configuration variables to the system config file
@@ -493,7 +523,7 @@ main() {
     detect_defaults
     prompt_config
     setup_ssh_key_for_mac
-    save_hotspot_password_to_mac
+    deploy_mac_helper
     setup_web_dashboard
     write_config
     install_service
