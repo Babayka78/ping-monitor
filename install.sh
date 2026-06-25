@@ -177,7 +177,7 @@ detect_defaults() {
     AUTOMATE_ENDPOINT="${AUTOMATE_ENDPOINT:-failover_$(random_suffix)}"
     MAIN_INTERVAL="${MAIN_INTERVAL:-5}"
     SIDE_INTERVAL="${SIDE_INTERVAL:-30}"
-    DEBUG="${DEBUG:-false}"
+    DEBUG="${DEBUG:-true}"
     WEB_PORT="${WEB_PORT:-}"
 }
 
