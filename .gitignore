@@ -1,0 +1,11 @@
+# Secrets — never commit the real config
+config.env
+
+# Personal notes with real network topology
+README.txt
+
+# Runtime logs
+*.log
+
+# Plans and drafts
+plan.md

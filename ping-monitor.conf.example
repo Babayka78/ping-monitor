@@ -1,0 +1,52 @@
+server {
+    listen 80 default_server;
+    server_name _;
+
+    access_log /var/log/nginx/ping-monitor-access.log;
+    error_log /var/log/nginx/ping-monitor-error.log;
+
+    location = / {
+        default_type text/html; charset utf-8;
+        return 200 '<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ping monitor</title>
+<style>
+:root{color-scheme:light dark}
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:#111827;color:#f9fafb}
+.wrap{max-width:1000px;margin:0 auto;padding:24px}
+h1{margin:0 0 8px;font-size:28px}
+p{color:#cbd5e1}
+.card{background:#1f2937;border:1px solid #374151;border-radius:12px;padding:16px;margin-top:16px}
+pre{white-space:pre-wrap;word-break:break-word;background:#0b1220;color:#e5e7eb;padding:16px;border-radius:10px;min-height:200px;overflow:auto}
+.meta{display:flex;gap:12px;flex-wrap:wrap;font-size:14px;color:#94a3b8}
+a.button{display:inline-block;padding:10px 14px;border-radius:10px;background:#2563eb;color:#fff;text-decoration:none;margin-right:8px}
+iframe{width:100%;height:70vh;border:0;background:#0b1220}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Ping Monitor — Outage Log</h1>
+<p>Line format: DDMMYY HH:MM:SS - HH:MM:SS</p>
+<div class="meta"><span>Source: /var/log/ping-monitor/outages.log</span><span>Refresh for latest data</span></div>
+<div class="card"><a class="button" href="/log">View log</a><a class="button" href="/log/raw">Download raw</a></div>
+<div class="card"><iframe src="/log"></iframe></div>
+</div>
+</body>
+</html>';
+    }
+
+    location = /log {
+        alias /var/log/ping-monitor/outages.log;
+        default_type text/plain; charset utf-8;
+        add_header Cache-Control "no-store";
+    }
+
+    location = /log/raw {
+        alias /var/log/ping-monitor/outages.log;
+        default_type text/plain;
+        add_header Content-Disposition 'attachment; filename="outages.log"';
+    }
+}

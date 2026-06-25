@@ -1,0 +1,15 @@
+[Unit]
+Description=Pi Ping Monitor — automatic network failover service
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=root
+Environment=CONFIG_FILE=/etc/ping-monitor/config.env
+ExecStart=/usr/local/bin/ping-monitor.sh
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
