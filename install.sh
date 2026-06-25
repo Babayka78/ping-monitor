@@ -22,6 +22,7 @@ TARGET_MAIN=""
 TARGET_SIDE=""
 TARGET_MAC=""
 HOTSPOT_SSID=""
+HOTSPOT_PASSWORD=""
 AUTOMATE_HOST=""
 AUTOMATE_PORT=""
 AUTOMATE_ENDPOINT=""
@@ -170,6 +171,7 @@ detect_defaults() {
     SSH_USER="${SSH_USER:-$REAL_USER}"
     SSH_KEY_PATH="${SSH_KEY_PATH:-$REAL_HOME/.ssh/id_ed25519_ping_monitor}"
     HOTSPOT_SSID="${HOTSPOT_SSID:-YourHotspotSSID}"
+    HOTSPOT_PASSWORD="${HOTSPOT_PASSWORD:-YourHotspotPass}"
     AUTOMATE_HOST="${AUTOMATE_HOST:-192.168.0.65}"
     AUTOMATE_PORT="${AUTOMATE_PORT:-7801}"
     AUTOMATE_ENDPOINT="${AUTOMATE_ENDPOINT:-failover_$(random_suffix)}"
@@ -200,6 +202,7 @@ prompt_config() {
     SSH_USER="$(prompt_value 'Mac SSH Username (SSH_USER)' "$SSH_USER")"
     SSH_KEY_PATH="$(prompt_value 'SSH Key Path (SSH_KEY_PATH)' "$SSH_KEY_PATH")"
     HOTSPOT_SSID="$(prompt_value 'Phone Hotspot SSID (HOTSPOT_SSID)' "$HOTSPOT_SSID")"
+    HOTSPOT_PASSWORD="$(prompt_value 'Phone Hotspot Password (HOTSPOT_PASSWORD)' "$HOTSPOT_PASSWORD")"
     AUTOMATE_HOST="$(prompt_value 'Android Phone IP (AUTOMATE_HOST)' "$AUTOMATE_HOST")"
     AUTOMATE_PORT="$(prompt_value 'Automate HTTP Port (AUTOMATE_PORT)' "$AUTOMATE_PORT")"
     AUTOMATE_ENDPOINT="$(prompt_value 'Automate Endpoint (AUTOMATE_ENDPOINT)' "$AUTOMATE_ENDPOINT")"
@@ -283,48 +286,59 @@ setup_ssh_key_for_mac() {
 deploy_mac_helper() {
     log "Deploying restricted SSH helper to Mac..."
     
+    local safe_pass="${HOTSPOT_PASSWORD//\'/\'\\\'\'}"
     local safe_ssid="${HOTSPOT_SSID//\'/\'\\\'\'}"
-    
-    # 1. Create directory and .env file on the Mac
-    if sudo -u "$REAL_USER" ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" "$SSH_USER@$TARGET_MAC" "
-        mkdir -p ~/.ping-monitor
-        cat > ~/.ping-monitor/config.env <<'EOF'
-HOTSPOT_SSID='${safe_ssid}'
-EOF
-        chmod 600 ~/.ping-monitor/config.env
-    " >/dev/null 2>&1; then
-        log "Mac environment configuration created successfully."
-    else
-        warn "Failed to configure Mac environment. Ensure SSH access works."
-        return 1
-    fi
-
-    # 2. Copy the helper script
-    if sudo -u "$REAL_USER" scp -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" "$SCRIPT_DIR/ping-monitor-helper.sh" "$SSH_USER@$TARGET_MAC:~/.ping-monitor/ping-monitor-helper.sh" >/dev/null 2>&1; then
-        sudo -u "$REAL_USER" ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" "$SSH_USER@$TARGET_MAC" "chmod +x ~/.ping-monitor/ping-monitor-helper.sh"
-        log "Helper script deployed."
-    else
-        warn "Failed to copy helper script to Mac."
-        return 1
-    fi
-
-    # 3. Restrict the authorized_keys
-    log "Restricting SSH key in Mac's authorized_keys..."
     local pubkey_content
     pubkey_content="$(cat "${SSH_KEY_PATH}.pub")"
+
+    # Base SSH command
+    local SSH_CMD="sudo -u \"$REAL_USER\" ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new"
+    local AUTH_OPTS="-o BatchMode=yes -i \"$SSH_KEY_PATH\""
     
-    sudo -u "$REAL_USER" ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" "$SSH_USER@$TARGET_MAC" "
-        KEY_CONTENT=\"${pubkey_content}\"
-        RESTRICTION=\"command=\\\"/Users/$SSH_USER/.ping-monitor/ping-monitor-helper.sh\\\",no-pty,no-port-forwarding,no-x11-forwarding,no-agent-forwarding\"
-        
-        # Remove the key if it already exists to avoid duplicates
-        grep -v \"\$KEY_CONTENT\" ~/.ssh/authorized_keys > ~/.ssh/authorized_keys.tmp
-        # Add the restricted version
-        echo \"\$RESTRICTION \$KEY_CONTENT\" >> ~/.ssh/authorized_keys.tmp
-        mv ~/.ssh/authorized_keys.tmp ~/.ssh/authorized_keys
-        chmod 600 ~/.ssh/authorized_keys
-    " >/dev/null 2>&1
-    log "SSH key restricted successfully on the Mac."
+    # Check if the key is restricted
+    local check_output
+    check_output=$(eval "$SSH_CMD $AUTH_OPTS \"$SSH_USER@$TARGET_MAC\" true 2>&1" || true)
+
+    if [[ "$check_output" == *"Access Denied"* ]]; then
+        log "SSH key is already restricted. We need your Mac password to bypass the restriction and update the files."
+        AUTH_OPTS="-o PubkeyAuthentication=no"
+    elif [[ -n "$check_output" ]] && [[ "$check_output" != *"Permanently added"* ]]; then
+        warn "Failed to test SSH connection: $check_output"
+        return 1
+    fi
+
+    # Build the massive deployment payload
+    local deploy_payload
+    deploy_payload="$(cat <<EOF
+mkdir -p ~/.ping-monitor
+cat > ~/.ping-monitor/config.env <<'ENV_EOF'
+HOTSPOT_SSID='${safe_ssid}'
+HOTSPOT_PASSWORD='${safe_pass}'
+ENV_EOF
+chmod 600 ~/.ping-monitor/config.env
+
+cat > ~/.ping-monitor/ping-monitor-helper.sh <<'HELPER_EOF'
+$(cat "$SCRIPT_DIR/ping-monitor-helper.sh")
+HELPER_EOF
+chmod +x ~/.ping-monitor/ping-monitor-helper.sh
+
+KEY_CONTENT="${pubkey_content}"
+RESTRICTION="command=\"/Users/$SSH_USER/.ping-monitor/ping-monitor-helper.sh\",no-pty,no-port-forwarding,no-x11-forwarding,no-agent-forwarding"
+grep -v "\$KEY_CONTENT" ~/.ssh/authorized_keys > ~/.ssh/authorized_keys.tmp || true
+echo "\$RESTRICTION \$KEY_CONTENT" >> ~/.ssh/authorized_keys.tmp
+mv ~/.ssh/authorized_keys.tmp ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+echo "DEPLOY_SUCCESS"
+EOF
+)"
+
+    # Execute the payload in a single SSH connection
+    if eval "$SSH_CMD $AUTH_OPTS \"$SSH_USER@$TARGET_MAC\" 'bash -s'" <<< "$deploy_payload" | grep -q "DEPLOY_SUCCESS"; then
+        log "Mac environment updated and SSH key restricted successfully."
+    else
+        warn "Failed to update Mac environment."
+        return 1
+    fi
 }
 
 # Saves the final configuration variables to the system config file

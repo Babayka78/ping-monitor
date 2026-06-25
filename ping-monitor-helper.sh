@@ -18,11 +18,11 @@ case "$CMD" in
         ioreg -r -k AppleClamshellState -d 4 | grep AppleClamshellState | cut -d= -f2 | tr -d ' '
         ;;
     switch_wifi)
-        if [[ -z "${HOTSPOT_SSID:-}" ]]; then
-            echo "Error: HOTSPOT_SSID is not configured on the Mac."
+        if [[ -z "${HOTSPOT_SSID:-}" || -z "${HOTSPOT_PASSWORD:-}" ]]; then
+            echo "Error: HOTSPOT_SSID or HOTSPOT_PASSWORD is not configured on the Mac."
             exit 1
         fi
-        networksetup -setairportnetwork en0 "$HOTSPOT_SSID"
+        networksetup -setairportnetwork en0 "$HOTSPOT_SSID" "$HOTSPOT_PASSWORD"
         ;;
     *)
         echo "Access Denied: Command '$CMD' is not allowed."
