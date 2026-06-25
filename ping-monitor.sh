@@ -180,19 +180,19 @@ while true; do
     fi
     save_state
 
+    debug_log "Triggering Automate failover (max 5s)..."
+    CURL_OUT="$(trigger_phone_failover)"
+    CURL_EXIT=$?
+    HTTP_CODE="$(grep -o 'HTTP_CODE:[0-9]*' <<< "$CURL_OUT" | cut -d: -f2)"
+    debug_log "Automate trigger finished. Exit code: $CURL_EXIT, HTTP: ${HTTP_CODE:-unknown}"
+
     if "$PING_BIN" -c 1 -W 1 "$TARGET_MAC" >/dev/null 2>&1; then
       debug_log "Mac ($TARGET_MAC) is pingable. Checking lid state..."
       LID_STATE="$(check_mac_lid)"
       debug_log "Mac lid state: '$LID_STATE'"
 
       if [[ "$LID_STATE" == "No" ]]; then
-        debug_log "Lid is open. Triggering Automate (max 5s)..."
-        CURL_OUT="$(trigger_phone_failover)"
-        CURL_EXIT=$?
-        HTTP_CODE="$(grep -o 'HTTP_CODE:[0-9]*' <<< "$CURL_OUT" | cut -d: -f2)"
-        debug_log "Automate trigger finished. Exit code: $CURL_EXIT, HTTP: ${HTTP_CODE:-unknown}"
-
-        debug_log "Sleeping for 8 seconds before switching Mac Wi-Fi..."
+        debug_log "Lid is open. Sleeping for 8 seconds before switching Mac Wi-Fi..."
         sleep 8
 
         debug_log "Switching Mac Wi-Fi to hotspot in background..."
@@ -202,10 +202,10 @@ while true; do
           debug_log "Mac switch finished. Exit code: $MAC_EXIT, Output: $MAC_OUT"
         ) &
       else
-        debug_log "Lid is not 'No'. Skipping failover."
+        debug_log "Lid is closed. Skipping Mac Wi-Fi switch."
       fi
     else
-      debug_log "Mac ($TARGET_MAC) is NOT pingable. Skipping failover."
+      debug_log "Mac ($TARGET_MAC) is NOT pingable. Skipping Mac Wi-Fi switch."
     fi
   fi
 
