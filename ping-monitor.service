@@ -5,9 +5,13 @@ After=network-online.target
 
 [Service]
 Type=simple
-User=root
+User=@@REAL_USER@@
 Environment=CONFIG_FILE=/etc/ping-monitor/config.env
+LogsDirectory=ping-monitor
+StateDirectory=ping-monitor
 ExecStart=/usr/local/bin/ping-monitor.sh
+StandardOutput=journal
+StandardError=journal
 Restart=always
 RestartSec=2
 
