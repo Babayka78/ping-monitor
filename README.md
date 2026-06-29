@@ -145,7 +145,7 @@ For those reviewing the project architecture, here is the logical flow executed 
        └───────────┬────────────┘          │
                    ▼                       │
           /──────────────────\             │
-          │ ping_count >= 10?│─── NO ──────┘
+          │ ping_count >= 60?│─── NO ──────┘
           \──────────────────/
                    │ YES
                    ▼

@@ -218,7 +218,6 @@ load_env_file() {
 # Tries to auto-detect the ISP router IP and sets default values for variables
 detect_defaults() {
     local isp_gw=""
-
     log "Detecting ISP router via ip route..."
     isp_gw="$(ip route show default 2>/dev/null | awk '/default/ {print $3}' | head -n 1)"
     is_valid_ipv4 "$isp_gw" || isp_gw=""
@@ -277,7 +276,7 @@ prompt_password() {
     local current="$3" input
     if [[ -n "$current" ]]; then
         if is_from_env "$var_name"; then
-            label="$label [hidden, from config.env]"
+            label="$label [hidden, from pi-ping-monitor/config.env]"
         else
             label="$label [hidden]"
         fi
@@ -468,15 +467,16 @@ setup_ssh_key_for_mac() {
     pubkey="${SSH_KEY_PATH}.pub"
     [[ -f "$pubkey" ]] || die "Missing public key: $pubkey"
 
-    echo
-    echo "Before copying the key to your Mac:"
+    section "Before copying the key to your Mac:"
     echo "  1. Enable Remote Login on the Mac"
     echo "  2. Ensure user '$SSH_USER' is allowed to log in via SSH"
     echo "  3. Ensure the Mac is reachable at $TARGET_MAC"
     echo
 
     if sudo -u "$REAL_USER" ssh -o BatchMode=yes -o ConnectTimeout=5 \
-         -i "$SSH_KEY_PATH" "$SSH_USER@$TARGET_MAC" true 2>/dev/null; then
+         -i "$SSH_KEY_PATH" "$SSH_USER@$TARGET_MAC" true >/dev/null 2>&1 || \
+       sudo -u "$REAL_USER" ssh -o BatchMode=yes -o ConnectTimeout=5 \
+         -i "$SSH_KEY_PATH" "$SSH_USER@$TARGET_MAC" check_lid >/dev/null 2>&1; then
         log "SSH key auth already works, skipping ssh-copy-id."
     else
         read -r -p "Copy SSH public key to Mac now using ssh-copy-id? $prompt_str: " copy_now
@@ -500,7 +500,8 @@ setup_ssh_key_for_mac() {
     read -r -p "Test SSH connectivity to the Mac now? [Y/n]: " test_now
     test_now="${test_now:-Y}"
     if [[ "$test_now" =~ ^[Yy]$ ]]; then
-        if sudo -u "$REAL_USER" ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" "$SSH_USER@$TARGET_MAC" 'echo SSH_OK' >/dev/null 2>&1; then
+        if sudo -u "$REAL_USER" ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" "$SSH_USER@$TARGET_MAC" 'echo SSH_OK' >/dev/null 2>&1 || \
+           sudo -u "$REAL_USER" ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" "$SSH_USER@$TARGET_MAC" check_lid >/dev/null 2>&1; then
             log "SSH test succeeded."
         else
             warn "SSH test failed. You can continue, but failover actions may not work until SSH access is fixed."
@@ -884,6 +885,7 @@ main() {
         prompt_config
         prompt_dashboard_setup
         
+        clear
         section "📋 PLEASE REVIEW YOUR CONFIGURATION:"
         print_config_table
         hr

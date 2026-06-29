@@ -13,3 +13,8 @@ plan.md
 # Development 
 deploy-to-test.sh
 full_changes.txt
+
+# Agent Configuration
+.agent_rules.md
+
+test_ip.sh
