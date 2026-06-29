@@ -16,5 +16,5 @@ full_changes.txt
 
 # Agent Configuration
 .agent_rules.md
-
+test-vulnerability.sh
 test_ip.sh
