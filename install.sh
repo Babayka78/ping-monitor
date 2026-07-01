@@ -151,8 +151,15 @@ install_bootstrap_deps() {
 
     if ((${#missing_deps[@]} > 0)); then
         warn "Missing required packages: ${missing_deps[*]}"
-        log "Installing missing packages..."
-        apt_install "${missing_deps[@]}"
+        local ans
+        read -r -p "Install missing packages now? [Y/n]: " ans
+        ans="${ans:-Y}"
+        if [[ "$ans" =~ ^[Yy]$ ]]; then
+            log "Installing missing packages..."
+            apt_install "${missing_deps[@]}"
+        else
+            die "Cannot proceed without required dependencies. Please install them manually."
+        fi
     else
         log "All installer prerequisites are present."
     fi

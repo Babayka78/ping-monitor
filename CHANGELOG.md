@@ -14,6 +14,7 @@ All notable changes to the Pi Ping Monitor project will be documented in this fi
 - Added explicit SSH timeout and keepalive safeguards for remote calls to the Mac.
 
 ### Changed
+- The installer now asks for explicit user confirmation before installing missing prerequisite packages (`curl`, `iputils-ping`, `iproute2`, `openssh-client`). If declined, the installer aborts cleanly.
 - Updated `README.md` to document the new service lifecycle events (startup and shutdown) in the Outage Logging section.
 - Updated `README.md` to reflect that `CROSS_CHECK` can now be left empty to skip secondary checks, instead of using `127.0.0.1`.
 - Clarified in `README.md` that `TARGET_MAIN`, `TARGET_MAC`, and `AUTOMATE_HOST` are mandatory configuration fields.
