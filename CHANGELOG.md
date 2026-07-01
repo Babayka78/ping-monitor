@@ -5,6 +5,9 @@ All notable changes to the Pi Ping Monitor project will be documented in this fi
 ## [Unreleased]
 
 ### Added
+- Explicit prompts to separately enable (on boot) and start (now) the ping-monitor service during installation.
+- Context-aware post-installation self-tests that verify service status based on user choices.
+- Instructions for running the uninstaller in the final installation summary.
 - Added a quick update option to the installer: when declining reconfiguration during re-installation, users can now choose to simply update the script and restart the service without changing environment settings.
 - Added a restricted macOS helper script (`ping-monitor-helper.sh`) that is deployed to the Mac and used for all supported remote actions.
 - Added dedicated ED25519 SSH key generation and deployment for monitor-to-Mac communication.
@@ -15,6 +18,9 @@ All notable changes to the Pi Ping Monitor project will be documented in this fi
 - Added explicit SSH timeout and keepalive safeguards for remote calls to the Mac.
 
 ### Changed
+- Streamlined the installation process into a single automated flow after configuration review, removing redundant interactive prompts.
+- Updated the dashboard completion output to omit the URL label if Nginx setup was skipped.
+- Used the `section` UI helper for the final "Proceed with installation" prompt.
 - The installer now asks for explicit user confirmation before installing missing prerequisite packages (`curl`, `iputils-ping`, `iproute2`, `openssh-client`). If declined, the installer aborts cleanly.
 - Updated `README.md` to document the new service lifecycle events (startup and shutdown) in the Outage Logging section.
 - Updated `README.md` to reflect that `CROSS_CHECK` can now be left empty to skip secondary checks, instead of using `127.0.0.1`.
@@ -43,6 +49,7 @@ All notable changes to the Pi Ping Monitor project will be documented in this fi
 - Added early configuration validation in `ping-monitor.sh` to reject invalid host, port, and integer values before the monitor loop starts.
 
 ### Fixed
+- Fixed the `prompt_password` function to correctly display the `Entered: ***` mask when accepting a default value.
 - Secondary ping no longer fails when CROSS_CHECK is left empty.
 - Prevented the monitoring loop from hanging indefinitely when SSH connectivity becomes unresponsive.
 - Improved handling of expected non-zero exit codes from the Android Automate HTTP trigger during failover.

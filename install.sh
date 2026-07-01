@@ -301,6 +301,9 @@ prompt_password() {
         echo >&2
         
         if [[ -z "$input" && -n "$current" ]]; then
+            local masked_current
+            masked_current=$(printf "%${#current}s" | tr ' ' '*')
+            echo "  Entered: $masked_current" >&2
             printf '%s' "$current"
             return 0
         fi
@@ -505,20 +508,12 @@ setup_ssh_key_for_mac() {
     if [[ -f "$SSH_KEY_PATH" ]]; then
         log "Existing SSH private key found: $SSH_KEY_PATH"
     else
-        read -r -p "Generate dedicated SSH key for Mac access at $SSH_KEY_PATH? $prompt_str: " gen_key
-        gen_key="${gen_key:-$def_ans}"
-
-        if [[ "$gen_key" =~ ^[Yy]$ ]]; then
-            log "Generating SSH key..."
-            ssh-keygen -t ed25519 -f "$SSH_KEY_PATH" -N "" -C "ping-monitor@$(hostname)"
-            chown "$REAL_USER:$REAL_USER" "$SSH_KEY_PATH" "$SSH_KEY_PATH.pub" "$key_dir"
-            chmod 600 "$SSH_KEY_PATH"
-            chmod 644 "$SSH_KEY_PATH.pub"
-            chmod 700 "$key_dir"
-        else
-            warn "SSH key generation skipped. Make sure SSH_KEY_PATH points to a valid private key."
-            return 0
-        fi
+        log "Generating SSH key..."
+        ssh-keygen -t ed25519 -f "$SSH_KEY_PATH" -N "" -C "ping-monitor@$(hostname)"
+        chown "$REAL_USER:$REAL_USER" "$SSH_KEY_PATH" "$SSH_KEY_PATH.pub" "$key_dir"
+        chmod 600 "$SSH_KEY_PATH"
+        chmod 644 "$SSH_KEY_PATH.pub"
+        chmod 700 "$key_dir"
     fi
 
     pubkey="${SSH_KEY_PATH}.pub"
@@ -536,33 +531,22 @@ setup_ssh_key_for_mac() {
          -i "$SSH_KEY_PATH" "$SSH_USER@$TARGET_MAC" check_lid >/dev/null 2>&1; then
         log "SSH key auth already works, skipping ssh-copy-id."
     else
-        read -r -p "Copy SSH public key to Mac now using ssh-copy-id? $prompt_str: " copy_now
-        copy_now="${copy_now:-$def_ans}"
-
-        if [[ "$copy_now" =~ ^[Yy]$ ]]; then
-            subsection "🔐 ATTENTION: The system will now prompt for the Mac password
+        subsection "🔐 ATTENTION: The system will now prompt for the Mac password
     for user '$SSH_USER'. Characters will be hidden."
-            if sudo -u "$REAL_USER" ssh-copy-id -i "$pubkey" "$SSH_USER@$TARGET_MAC"; then
-                log "SSH public key installed successfully on the Mac."
-            else
-                warn "ssh-copy-id failed. Run this manually after enabling Remote Login on the Mac:"
-                command_block "sudo -u \"$REAL_USER\" ssh-copy-id -i \"$pubkey\" \"$SSH_USER@$TARGET_MAC\""
-            fi
+        if sudo -u "$REAL_USER" ssh-copy-id -i "$pubkey" "$SSH_USER@$TARGET_MAC"; then
+            log "SSH public key installed successfully on the Mac."
         else
-            echo "Run this manually when ready:"
+            warn "ssh-copy-id failed. Run this manually after enabling Remote Login on the Mac:"
             command_block "sudo -u \"$REAL_USER\" ssh-copy-id -i \"$pubkey\" \"$SSH_USER@$TARGET_MAC\""
         fi
     fi
 
-    read -r -p "Test SSH connectivity to the Mac now? [Y/n]: " test_now
-    test_now="${test_now:-Y}"
-    if [[ "$test_now" =~ ^[Yy]$ ]]; then
-        if sudo -u "$REAL_USER" ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" "$SSH_USER@$TARGET_MAC" 'echo SSH_OK' >/dev/null 2>&1 || \
-           sudo -u "$REAL_USER" ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" "$SSH_USER@$TARGET_MAC" check_lid >/dev/null 2>&1; then
-            log "SSH test succeeded."
-        else
-            warn "SSH test failed. You can continue, but failover actions may not work until SSH access is fixed."
-        fi
+    log "Testing SSH connectivity to the Mac..."
+    if sudo -u "$REAL_USER" ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" "$SSH_USER@$TARGET_MAC" 'echo SSH_OK' >/dev/null 2>&1 || \
+       sudo -u "$REAL_USER" ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" "$SSH_USER@$TARGET_MAC" check_lid >/dev/null 2>&1; then
+        log "SSH test succeeded."
+    else
+        warn "SSH test failed. You can continue, but failover actions may not work until SSH access is fixed."
     fi
 }
 
@@ -661,16 +645,35 @@ install_service() {
     systemctl daemon-reload
     
     section "🚀 INSTALLATION ALMOST COMPLETE. START SERVICE?"
-    local start_now
+    local enable_now start_now
+    read -r -p "Enable the ping-monitor service on boot? [Y/n]: " enable_now
+    enable_now="${enable_now:-Y}"
     read -r -p "Start the ping-monitor service now? [Y/n]: " start_now
     start_now="${start_now:-Y}"
-    if [[ "$start_now" =~ ^[Yy]$ ]]; then
-        systemctl enable --now "$SERVICE_NAME"
-        log "Service started successfully."
+
+    if [[ "$enable_now" =~ ^[Yy]$ ]]; then
+        SERVICE_ENABLED_NOW="true"
     else
+        SERVICE_ENABLED_NOW="false"
+    fi
+
+    if [[ "$start_now" =~ ^[Yy]$ ]]; then
+        SERVICE_STARTED_NOW="true"
+    else
+        SERVICE_STARTED_NOW="false"
+    fi
+
+    if [[ "$SERVICE_ENABLED_NOW" == "true" && "$SERVICE_STARTED_NOW" == "true" ]]; then
+        systemctl enable --now "$SERVICE_NAME"
+        log "Service enabled and started."
+    elif [[ "$SERVICE_ENABLED_NOW" == "true" && "$SERVICE_STARTED_NOW" == "false" ]]; then
         systemctl enable "$SERVICE_NAME"
-        log "Service enabled but NOT started. To start it later, run:"
-        command_block "systemctl start $SERVICE_NAME"
+        log "Service enabled but not started."
+    elif [[ "$SERVICE_ENABLED_NOW" == "false" && "$SERVICE_STARTED_NOW" == "true" ]]; then
+        systemctl start "$SERVICE_NAME"
+        log "Service started for current session only."
+    else
+        log "Service installed but not enabled and not started."
     fi
 }
 
@@ -852,11 +855,25 @@ run_self_tests() {
     subsection "Running Post-Installation Self-Tests"
     
     # 1. Check Systemd Service
-    if systemctl is-active --quiet "$SERVICE_NAME"; then
-        echo "[ OK ] Service $SERVICE_NAME is running."
+    if [[ "$SERVICE_STARTED_NOW" == "true" ]]; then
+        if systemctl is-active --quiet "$SERVICE_NAME"; then
+            echo "[ OK ] Service $SERVICE_NAME is running."
+        else
+            echo "[WARN] Service $SERVICE_NAME is NOT running! Check:"
+            command_block "systemctl status $SERVICE_NAME"
+        fi
     else
-        echo "[WARN] Service $SERVICE_NAME is NOT running! Check:"
-        command_block "systemctl status $SERVICE_NAME"
+        echo "[INFO] Service $SERVICE_NAME start was skipped by user choice."
+    fi
+
+    if [[ "$SERVICE_ENABLED_NOW" == "true" ]]; then
+        if systemctl is-enabled --quiet "$SERVICE_NAME" 2>/dev/null; then
+            echo "[ OK ] Service is enabled and will start automatically on boot."
+        else
+            echo "[WARN] Service is NOT enabled. It will not start on boot."
+        fi
+    else
+        echo "[INFO] Service enable was skipped by user choice."
     fi
 
     # 2. Check Dashboard
@@ -967,6 +984,22 @@ main() {
         echo "Restarting configuration..."
     done
 
+    section "🚀 PROCEED WITH INSTALLATION?"
+    echo "This will:"
+    echo "  - generate a dedicated SSH key if needed,"
+    echo "  - add the Mac host to known_hosts on this Linux host if missing,"
+    echo "  - prompt for the Mac SSH password if needed,"
+    echo "  - copy the SSH key to the Mac,"
+    echo "  - test SSH access,"
+    echo "  - install the main program."
+    echo
+    local proceed_inst
+    read -r -p "Continue? [y/N]: " proceed_inst
+    if [[ ! "$proceed_inst" =~ ^[Yy]$ ]]; then
+        log "Installation aborted by user."
+        exit 0
+    fi
+
     setup_ssh_key_for_mac
     deploy_mac_helper || die "Mac helper deployment failed. Installation aborted."
     setup_web_dashboard
@@ -986,17 +1019,22 @@ main() {
     echo "  • HTTP Server Port: $AUTOMATE_PORT"
     echo "  • Endpoint Path:    /$AUTOMATE_ENDPOINT"
     echo
-    echo "🖥️  2. Dashboard URL"
     if [[ -n "$WEB_PORT" ]]; then
+        echo "🖥️  2. Dashboard URL"
         echo "  http://$local_ip:$WEB_PORT/"
     else
-        echo "  (Nginx setup skipped. Logs are in $LOG_DIR/)"
+        echo "🖥️  2. Dashboard"
+        echo "  Nginx setup was skipped. Logs are in $LOG_DIR/"
     fi
 
     echo "Done. Verify with:"
     command_block \
         "systemctl status $SERVICE_NAME" \
         "tail -f $LOG_DIR/outages.log"
+
+    echo "🗑️  3. Uninstall"
+    echo "To completely remove the service and its files, run:"
+    command_block "sudo bash uninstall.sh"
 }
 
 main "$@"

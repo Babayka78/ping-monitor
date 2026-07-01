@@ -230,10 +230,10 @@ If you want to skip typing credentials manually, you can create a `config.env` f
 The installer is fully interactive and will automatically guide you through:
 - Detecting your network environment and suggesting default IP addresses.
 - Prompting you for the remaining settings (Hotspot SSID, Automate token, etc.).
-- Generating a dedicated SSH key and helping you copy it to your Mac (`ssh-copy-id`).
+- Generating a dedicated SSH key, automatically copying it to your Mac, and testing the SSH connection.
 - Deploying the restricted SSH helper script (`ping-monitor-helper.sh`) to the Mac and locking the SSH key to it.
 - Installing and configuring Nginx for the web dashboard (on a dynamically selected port).
-- Installing the systemd service.
+- Installing the systemd service (with independent options to enable it on boot and start it immediately).
 
 ### 3. Post-install self-tests
 
