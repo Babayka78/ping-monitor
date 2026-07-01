@@ -82,13 +82,13 @@ HAS_KH_BAK=0
 PI_IP=$(echo "$SSH_CLIENT" | awk '{print $1}')
 
 # 1. authorized_keys
-if [ -f ~/.ssh/authorized_keys ] && grep -q 'ping-monitor' ~/.ssh/authorized_keys; then
+if [ -f ~/.ssh/authorized_keys ] && grep -q 'command=".*ping-monitor-helper\.sh"' ~/.ssh/authorized_keys; then
     cp ~/.ssh/authorized_keys ~/.ssh/authorized_keys.bak
     HAS_AUTH_BAK=1
-    grep -v 'ping-monitor' ~/.ssh/authorized_keys > ~/.ssh/authorized_keys.tmp || true
+    grep -v 'command=".*ping-monitor-helper\.sh"' ~/.ssh/authorized_keys > ~/.ssh/authorized_keys.tmp || true
     mv ~/.ssh/authorized_keys.tmp ~/.ssh/authorized_keys
     chmod 600 ~/.ssh/authorized_keys
-    if grep -q 'ping-monitor' ~/.ssh/authorized_keys; then
+    if grep -q 'command=".*ping-monitor-helper\.sh"' ~/.ssh/authorized_keys; then
         echo "ERROR_AUTHORIZED_KEYS"
         mv ~/.ssh/authorized_keys.bak ~/.ssh/authorized_keys
         exit 1
@@ -181,39 +181,39 @@ EOF
     log "Removing project SSH keys ($key_to_remove)..."
     rm -f "$key_to_remove" "${key_to_remove}.pub"
 
-    log "Checking Nginx configuration..."
-    local NGINX_PORTS=""
-    if systemctl is-active --quiet nginx; then
-        NGINX_PORTS=$(ss -H -tlnp | grep nginx | awk '{print $4}' | awk -F: '{print $NF}' | sort -u || true)
-        local ONLY_WEB_PORT=false
-        if [[ -n "$WEB_PORT" && "$NGINX_PORTS" == "$WEB_PORT" ]]; then
-            ONLY_WEB_PORT=true
-        fi
+    log "Removing Nginx configuration for ping-monitor (if any)..."
+    rm -f /etc/nginx/sites-enabled/ping-monitor.conf
+    rm -f /etc/nginx/sites-available/ping-monitor.conf
+    rm -f /etc/nginx/conf.d/ping-monitor.conf
 
-        log "Removing Nginx configuration for ping-monitor..."
-        rm -f /etc/nginx/sites-enabled/ping-monitor.conf
-        rm -f /etc/nginx/sites-available/ping-monitor.conf
-        rm -f /etc/nginx/conf.d/ping-monitor.conf
-
-        if nginx -t >/dev/null 2>&1; then
-            systemctl restart nginx
-            if [[ "$ONLY_WEB_PORT" == "true" ]]; then
-                local del_nginx
-                read -r -p "Nginx was only used for ping-monitor (port $WEB_PORT). Do you want to completely uninstall Nginx? [y/N]: " del_nginx
-                if [[ "$del_nginx" =~ ^[Yy]$ ]]; then
-                    log "Uninstalling Nginx..."
-                    apt-get purge -y nginx nginx-common
-                    apt-get autoremove -y
-                fi
+    if command -v nginx >/dev/null 2>&1; then
+        if systemctl is-active --quiet nginx 2>/dev/null; then
+            if nginx -t >/dev/null 2>&1; then
+                systemctl try-restart nginx
+            else
+                warn "Nginx config test failed after removal. Skipping Nginx restart."
             fi
-        else
-            warn "Nginx config test failed after removal. Skipping Nginx restart."
         fi
-    else
-        log "Removing Nginx configuration for ping-monitor..."
-        rm -f /etc/nginx/sites-enabled/ping-monitor.conf
-        rm -f /etc/nginx/sites-available/ping-monitor.conf
-        rm -f /etc/nginx/conf.d/ping-monitor.conf
+
+        local other_sites=0
+        for conf in /etc/nginx/sites-enabled/* /etc/nginx/conf.d/*; do
+            [[ -e "$conf" ]] || continue
+            local base_name="$(basename "$conf")"
+            if [[ "$base_name" != "default" && "$base_name" != "default.conf" ]]; then
+                other_sites=$((other_sites + 1))
+            fi
+        done
+
+        if [[ "$other_sites" -eq 0 ]]; then
+            local del_nginx
+            echo "It appears ping-monitor was the only custom site configured in Nginx."
+            read -r -p "Do you want to completely uninstall the 'nginx' package and its dependencies from the system? [y/N]: " del_nginx
+            if [[ "$del_nginx" =~ ^[Yy]$ ]]; then
+                log "Uninstalling Nginx..."
+                apt-get purge -y nginx nginx-common
+                apt-get autoremove -y
+            fi
+        fi
     fi
 
     log "Removing /etc/ping-monitor..."

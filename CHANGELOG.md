@@ -18,6 +18,9 @@ All notable changes to the Pi Ping Monitor project will be documented in this fi
 - Added explicit SSH timeout and keepalive safeguards for remote calls to the Mac.
 
 ### Changed
+- Improved `uninstall.sh` safety by strictly matching the exact macOS `authorized_keys` command marker instead of a generic substring.
+- Decoupled Nginx dashboard configuration removal from the `systemctl is-active` state.
+- Enhanced the Nginx purge prompt to strictly check for the absence of any other custom site configurations before offering to uninstall the package.
 - Enforced a strictly managed SSH key (`id_ed25519_ping_monitor`) for Mac connections, entirely removing the ability to use or accidentally delete custom user keys.
 - Updated the service startup configuration prompt for better clarity.
 - Streamlined the installation process into a single automated flow after configuration review, removing redundant interactive prompts.

@@ -18,3 +18,4 @@ full_changes.txt
 .agent_rules.md
 test-vulnerability.sh
 test_ip.sh
+test-nginx.sh
