@@ -108,7 +108,7 @@ kv() {
     if is_from_env "$key"; then
         star="*"
     fi
-    printf '  %-23s %-16s %s = %s\n' "[$label]" "$key" "$star" "${value:-N/A}"
+    printf '  %-23s %-17s %s = %s\n' "[$label]" "$key" "$star" "${value:-N/A}"
 }
 
 # Ensures the script is run with sudo/root privileges
@@ -223,13 +223,13 @@ detect_defaults() {
     is_valid_ipv4 "$isp_gw" || isp_gw=""
 
     TARGET_MAIN="${TARGET_MAIN:-${isp_gw:-192.168.100.1}}"
-    CROSS_CHECK="${CROSS_CHECK:-127.0.0.1}"
-    TARGET_MAC="${TARGET_MAC:-192.168.0.173}"
-    SSH_USER="${SSH_USER:-$REAL_USER}"
+    CROSS_CHECK="${CROSS_CHECK:-}"
+    TARGET_MAC="${TARGET_MAC:-}"
+    SSH_USER="${SSH_USER:-}"
     SSH_KEY_PATH="${SSH_KEY_PATH:-$REAL_HOME/.ssh/id_ed25519_ping_monitor}"
     HOTSPOT_SSID="${HOTSPOT_SSID:-}"
     HOTSPOT_PASSWORD="${HOTSPOT_PASSWORD:-}"
-    AUTOMATE_HOST="${AUTOMATE_HOST:-192.168.0.65}"
+    AUTOMATE_HOST="${AUTOMATE_HOST:-}"
     AUTOMATE_PORT="${AUTOMATE_PORT:-7801}"
     AUTOMATE_ENDPOINT="${AUTOMATE_ENDPOINT:-failover_$(random_suffix)}"
     MAIN_INTERVAL="${MAIN_INTERVAL:-5}"
@@ -244,28 +244,34 @@ format_prompt() {
     local var_name="$2"
     local full_label
     if [[ -n "$var_name" ]]; then
-        full_label="$(printf "%s (%s)" "$label" "$var_name")"
+        full_label="$(printf "%-38s (%s)" "$label" "$var_name")"
     else
         full_label="$label"
     fi
-    printf "%-42s" "$full_label"
+    printf "%-65s" "$full_label"
 }
 
 # Helper function to ask the user a question with a default fallback
-prompt_value() {
-    local label
-    label="$(format_prompt "$1" "$2")"
+_read_input() {
+    local label="$1"
     local var_name="$2"
     local current="$3"
-    local input
     
     local star_bracket="[$current]"
     if is_from_env "$var_name"; then
         star_bracket="[${current}*]"
     fi
     
-    read -r -p "$label $star_bracket: " input
+    local input
+    read -e -r -p "$label $star_bracket: " input
     printf '%s' "${input:-$current}"
+}
+
+# Helper function to read user input with a default value and readline support
+prompt_value() {
+    local label
+    label="$(format_prompt "$1" "$2")"
+    _read_input "$label" "$2" "$3"
 }
 
 # Prompts for a password securely (hidden input) with confirmation
@@ -274,16 +280,17 @@ prompt_password() {
     label="$(format_prompt "$1" "$2")"
     local var_name="$2"
     local current="$3" input
+    local star_bracket="[]"
     if [[ -n "$current" ]]; then
         if is_from_env "$var_name"; then
-            label="$label [hidden, from pi-ping-monitor/config.env]"
+            star_bracket="[hidden*]"
         else
-            label="$label [hidden]"
+            star_bracket="[hidden]"
         fi
     fi
 
     while true; do
-        read -r -s -p "$label: " input >&2
+        read -r -s -p "$label $star_bracket: " input >&2
         echo >&2
         
         if [[ -z "$input" && -n "$current" ]]; then
@@ -319,24 +326,61 @@ is_valid_ipv4() {
 
 # Prompts for an IPv4 address and re-prompts until a valid one is entered.
 prompt_ipv4() {
-    local label
-    label="$(format_prompt "$1" "$2")"
+    local base_label="$1"
     local var_name="$2"
-    local current="$3" input
+    local current="$3"
+    local example="${4:-}"
     
-    local star_bracket="[$current]"
-    if is_from_env "$var_name"; then
-        star_bracket="[${current}*]"
+    if [[ "${IS_REINSTALL:-false}" != "true" ]] && [[ -z "$current" ]] && [[ -n "$example" ]]; then
+        base_label="$base_label (e.g. $example)"
     fi
-
+    
+    local label
+    label="$(format_prompt "$base_label" "$var_name")"
+    local input
+    
     while true; do
-        read -r -p "$label $star_bracket: " input
-        input="${input:-$current}"
+        input="$(_read_input "$label" "$var_name" "$current")"
         if is_valid_ipv4 "$input"; then
             printf '%s' "$input"
             return 0
         fi
         echo "[!] '$input' is not a valid IPv4 address. Please try again." >&2
+    done
+}
+
+# Prompts for an IPv4 address, but allows an empty string as a valid input.
+prompt_optional_ipv4() {
+    local base_label="$1"
+    local var_name="$2"
+    local current="$3"
+    local example="${4:-}"
+    
+    if [[ "${IS_REINSTALL:-false}" != "true" ]] && [[ -z "$current" ]] && [[ -n "$example" ]]; then
+        base_label="$base_label (e.g. $example)"
+    fi
+    
+    local full_label
+    if [[ -n "$var_name" ]]; then
+        full_label="$(printf "%-38s (%s) (optional)" "$base_label" "$var_name")"
+    else
+        full_label="$base_label (optional)"
+    fi
+    local label
+    label="$(printf "%-65s" "$full_label")"
+    local input
+    
+    while true; do
+        input="$(_read_input "$label" "$var_name" "$current")"
+        if [[ -z "$input" ]]; then
+            printf '%s' ""
+            return 0
+        fi
+        if is_valid_ipv4 "$input"; then
+            printf '%s' "$input"
+            return 0
+        fi
+        echo "[!] '$input' is not a valid IPv4 address (or leave empty). Please try again." >&2
     done
 }
 
@@ -347,14 +391,8 @@ prompt_port() {
     local var_name="$2"
     local current="$3" input
     
-    local star_bracket="[$current]"
-    if is_from_env "$var_name"; then
-        star_bracket="[${current}*]"
-    fi
-
     while true; do
-        read -r -p "$label $star_bracket: " input
-        input="${input:-$current}"
+        input="$(_read_input "$label" "$var_name" "$current")"
         if [[ "$input" =~ ^[0-9]+$ ]] && (( input >= 1 && input <= 65535 )); then
             printf '%s' "$input"
             return 0
@@ -370,20 +408,32 @@ prompt_nonempty() {
     local var_name="$2"
     local current="$3" input
     
-    local star_bracket="[$current]"
-    if is_from_env "$var_name"; then
-        star_bracket="[${current}*]"
-    fi
-
     while true; do
-        read -r -p "$label $star_bracket: " input
-        input="$(trim "${input:-$current}")"
+        input="$(trim "$(_read_input "$label" "$var_name" "$current")")"
         if [[ -n "$input" ]]; then
             printf '%s' "$input"
             return 0
         fi
         echo "[!] This field cannot be empty. Please try again." >&2
     done
+}
+
+# Prompts for the SSH key path, allowing filename-only input and reconstructing absolute paths
+prompt_ssh_key_path() {
+    local default_key_name
+    default_key_name="$(basename "$SSH_KEY_PATH")"
+    local key_name
+    key_name="$(prompt_nonempty 'SSH Key Path' 'SSH_KEY_PATH' "$default_key_name")"
+    
+    if [[ "$key_name" != "$default_key_name" ]]; then
+        if [[ "$key_name" == */* ]]; then
+            echo "$key_name"
+        else
+            echo "$REAL_HOME/.ssh/$key_name"
+        fi
+    else
+        echo "$SSH_KEY_PATH"
+    fi
 }
 
 # Guides the user through setting up all required IP addresses and credentials
@@ -402,14 +452,14 @@ prompt_config() {
     fi
     echo
 
-    TARGET_MAIN="$(prompt_ipv4 'ISP Router IP' 'TARGET_MAIN' "$TARGET_MAIN")"
-    CROSS_CHECK="$(prompt_ipv4 'Secondary IP' 'CROSS_CHECK' "$CROSS_CHECK")"
-    TARGET_MAC="$(prompt_ipv4 'Mac Computer IP' 'TARGET_MAC' "$TARGET_MAC")"
+    TARGET_MAIN="$(prompt_ipv4 'ISP Router IP' 'TARGET_MAIN' "$TARGET_MAIN" '192.168.100.1')"
+    CROSS_CHECK="$(prompt_optional_ipv4 'Secondary IP' 'CROSS_CHECK' "$CROSS_CHECK" '192.168.100.79')"
+    TARGET_MAC="$(prompt_ipv4 'Mac Computer IP' 'TARGET_MAC' "$TARGET_MAC" '192.168.0.173')"
     SSH_USER="$(prompt_nonempty 'Mac SSH Username' 'SSH_USER' "$SSH_USER")"
-    SSH_KEY_PATH="$(prompt_nonempty 'SSH Key Path' 'SSH_KEY_PATH' "$SSH_KEY_PATH")"
+    SSH_KEY_PATH="$(prompt_ssh_key_path)"
     HOTSPOT_SSID="$(prompt_nonempty 'Phone Hotspot SSID' 'HOTSPOT_SSID' "$HOTSPOT_SSID")"
     HOTSPOT_PASSWORD="$(prompt_password 'Phone Hotspot Password' 'HOTSPOT_PASSWORD' "$HOTSPOT_PASSWORD")"
-    AUTOMATE_HOST="$(prompt_ipv4 'Android Phone IP' 'AUTOMATE_HOST' "$AUTOMATE_HOST")"
+    AUTOMATE_HOST="$(prompt_ipv4 'Android Phone IP' 'AUTOMATE_HOST' "$AUTOMATE_HOST" '192.168.0.65')"
     AUTOMATE_PORT="$(prompt_port 'Automate HTTP Port' 'AUTOMATE_PORT' "$AUTOMATE_PORT")"
     AUTOMATE_ENDPOINT="$(prompt_nonempty 'Automate Endpoint' 'AUTOMATE_ENDPOINT' "$AUTOMATE_ENDPOINT")"
     
@@ -822,16 +872,17 @@ run_self_tests() {
 }
 
 print_config_table() {
+    local masked_pw="<hidden>"
+    if [[ -n "$HOTSPOT_PASSWORD" ]]; then
+        masked_pw=$(printf "%${#HOTSPOT_PASSWORD}s" | tr ' ' '*')
+    fi
+
     kv "Main Router IP" "TARGET_MAIN" "$TARGET_MAIN"
     kv "Secondary IP" "CROSS_CHECK" "$CROSS_CHECK"
     kv "Mac Computer IP" "TARGET_MAC" "$TARGET_MAC"
     kv "Mac SSH Username" "SSH_USER" "$SSH_USER"
     kv "SSH Key Path" "SSH_KEY_PATH" "$SSH_KEY_PATH"
     kv "Hotspot SSID" "HOTSPOT_SSID" "$HOTSPOT_SSID"
-    local masked_pw="<not set>"
-    if [[ -n "$HOTSPOT_PASSWORD" ]]; then
-        masked_pw=$(printf "%${#HOTSPOT_PASSWORD}s" | tr ' ' '*')
-    fi
     kv "Hotspot Password" "HOTSPOT_PASSWORD" "$masked_pw"
     kv "Android Phone IP" "AUTOMATE_HOST" "$AUTOMATE_HOST"
     kv "Automate Port" "AUTOMATE_PORT" "$AUTOMATE_PORT"
@@ -885,7 +936,7 @@ main() {
         prompt_config
         prompt_dashboard_setup
         
-        clear
+        clear -x
         section "📋 PLEASE REVIEW YOUR CONFIGURATION:"
         print_config_table
         hr

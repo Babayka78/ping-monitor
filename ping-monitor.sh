@@ -34,7 +34,7 @@ _load_config "$CONFIG_FILE"
 
 # Note: HOTSPOT_PASSWORD is intentionally omitted from this check as it is only used by the Mac helper.
 _missing=()
-for _var in TARGET_MAIN CROSS_CHECK TARGET_MAC HOTSPOT_SSID \
+for _var in TARGET_MAIN TARGET_MAC HOTSPOT_SSID \
             AUTOMATE_HOST AUTOMATE_PORT AUTOMATE_ENDPOINT SSH_USER SSH_KEY_PATH; do
   if [[ -z "${!_var:-}" ]]; then
     _missing+=("$_var")
@@ -70,7 +70,7 @@ _validate_integer MAIN_INTERVAL  "$MAIN_INTERVAL"
 _validate_integer SIDE_INTERVAL  "$SIDE_INTERVAL"
 _validate_integer AUTOMATE_PORT  "$AUTOMATE_PORT"
 _validate_host    TARGET_MAIN    "$TARGET_MAIN"
-_validate_host    CROSS_CHECK    "$CROSS_CHECK"
+[[ -z "$CROSS_CHECK" ]] || _validate_host CROSS_CHECK "$CROSS_CHECK"
 _validate_host    TARGET_MAC     "$TARGET_MAC"
 _validate_host    AUTOMATE_HOST  "$AUTOMATE_HOST"
 
@@ -225,19 +225,25 @@ while true; do
     main_state="down"
     main_outage_start=$(date '+%Y-%m-%d %H:%M:%S')
 
-    debug_log "Main link ($TARGET_MAIN) went down. Checking side link ($CROSS_CHECK) (3 attempts)..."
+    debug_log "Main link ($TARGET_MAIN) went down."
     side_state="down"
-    for _attempt in 1 2 3; do
-      if "$PING_BIN" -c 1 -W 1 "$CROSS_CHECK" >/dev/null 2>&1; then
-        side_state="up"
-        debug_log "Side link ($CROSS_CHECK) is UP (attempt $_attempt)."
-        break
+    if [[ -n "$CROSS_CHECK" ]]; then
+      debug_log "Checking side link ($CROSS_CHECK) (3 attempts)..."
+      for _attempt in 1 2 3; do
+        if "$PING_BIN" -c 1 -W 1 "$CROSS_CHECK" >/dev/null 2>&1; then
+          side_state="up"
+          debug_log "Side link ($CROSS_CHECK) is UP (attempt $_attempt)."
+          break
+        fi
+        debug_log "Side link ($CROSS_CHECK) did not respond (attempt $_attempt)."
+        [[ $_attempt -lt 3 ]] && sleep 2
+      done
+      if [[ "$side_state" == "down" ]]; then
+        debug_log "Side link ($CROSS_CHECK) is DOWN after 3 attempts."
       fi
-      debug_log "Side link ($CROSS_CHECK) did not respond (attempt $_attempt)."
-      [[ $_attempt -lt 3 ]] && sleep 2
-    done
-    if [[ "$side_state" == "down" ]]; then
-      debug_log "Side link ($CROSS_CHECK) is DOWN after 3 attempts."
+    else
+      side_state="up"
+      debug_log "Side link check skipped (CROSS_CHECK is empty)."
     fi
     save_state
 

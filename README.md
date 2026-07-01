@@ -275,7 +275,7 @@ sudo systemctl restart ping-monitor.service
 | Variable | Description | Example |
 |---|---|---|
 | `TARGET_MAIN` | ISP router IP to monitor | `192.168.100.1` |
-| `CROSS_CHECK` | Secondary device on the same switch (use `127.0.0.1` to skip) | `192.168.100.79` |
+| `CROSS_CHECK` | Secondary device on the same switch (use `` to skip) | `192.168.100.79` |
 | `TARGET_MAC` | Mac computer IP on local network | `192.168.0.173` |
 | `HOTSPOT_SSID` | Phone hotspot Wi-Fi name | `MyHotspot` |
 | `HOTSPOT_PASSWORD` | *(Not stored on Linux host!)* See Security section | N/A |
