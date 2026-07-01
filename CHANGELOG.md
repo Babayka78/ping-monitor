@@ -14,6 +14,12 @@ All notable changes to the Pi Ping Monitor project will be documented in this fi
 - Added explicit SSH timeout and keepalive safeguards for remote calls to the Mac.
 
 ### Changed
+- Updated `README.md` to document the new service lifecycle events (startup and shutdown) in the Outage Logging section.
+- Updated `README.md` to reflect that `CROSS_CHECK` can now be left empty to skip secondary checks, instead of using `127.0.0.1`.
+- Clarified in `README.md` that `TARGET_MAIN`, `TARGET_MAC`, and `AUTOMATE_HOST` are mandatory configuration fields.
+- Installer: TARGET_MAIN, TARGET_MAC and AUTOMATE_HOST are now required;
+  CROSS_CHECK remains the only optional IP.
+- README IP examples are now hints only (not runtime defaults).
 - Reworked the overall project architecture to use a restricted Mac-side helper instead of arbitrary remote command execution.
 - Reworked the installer flow to distinguish first-time installation from re-installation.
 - Re-installation now loads current defaults from `/etc/ping-monitor/config.env` instead of reusing the local project `config.env`.
@@ -35,6 +41,7 @@ All notable changes to the Pi Ping Monitor project will be documented in this fi
 - Added early configuration validation in `ping-monitor.sh` to reject invalid host, port, and integer values before the monitor loop starts.
 
 ### Fixed
+- Secondary ping no longer fails when CROSS_CHECK is left empty.
 - Prevented the monitoring loop from hanging indefinitely when SSH connectivity becomes unresponsive.
 - Improved handling of expected non-zero exit codes from the Android Automate HTTP trigger during failover.
 - Improved Mac hotspot switching reliability by retrying the Wi-Fi change instead of failing immediately.

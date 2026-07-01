@@ -92,6 +92,8 @@ SSH_COMMON_OPTS=(-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -o Serv
 exec 200>"$LOCK_FILE"
 flock -n 200 || { echo "ERROR: Another instance of ping-monitor is already running." >&2; exit 1; }
 
+echo "$(date '+%Y-%m-%d %H:%M:%S') - ping-monitor started" >> "$LOG_FILE"
+
 debug_log() {
   [[ "${DEBUG,,}" =~ ^(true|1|yes)$ ]] || return 0
   
@@ -150,6 +152,7 @@ STATE
 _cleanup() {
   debug_log "Signal received — saving state and exiting."
   save_state
+  echo "$(date '+%Y-%m-%d %H:%M:%S') - ping-monitor stopped" >> "$LOG_FILE"
   exit 0
 }
 trap _cleanup SIGTERM SIGINT SIGHUP

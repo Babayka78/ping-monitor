@@ -49,7 +49,7 @@ While the typical approach would be to buy a new home router with built-in 4G/LT
 
 1. The **Linux host** continuously pings the ISP router (`192.168.100.1`) every 5 seconds.
 2. When the ISP router **stops responding**, the Linux host:
-   - Checks if the **Secondary IP** (`192.168.100.79`) on the same switch is also unreachable. This is an additional check to confirm that the ISP router itself stopped responding, and not that the local networking equipment (like the switch) hung up or lost power. This Secondary IP can be any device in the ISP router's subnet (`192.168.100.x`) that is constantly online (e.g., a video recorder, a LAN printer, or another computer). *(If you don't have such a device, the installer uses `127.0.0.1` by default to safely skip this check).*
+   - Checks if the **Secondary IP** (`192.168.100.79`) on the same switch is also unreachable. This is an additional check to confirm that the ISP router itself stopped responding, and not that the local networking equipment (like the switch) hung up or lost power. This Secondary IP can be any device in the ISP router's subnet (`192.168.100.x`) that is constantly online (e.g., a video recorder, a LAN printer, or another computer). *(If you don't have such a device, you can leave this field empty during installation to safely skip this check).*
    - Pings the Mac (`192.168.0.173`) to verify it's online on the local network.
    - SSHs into the Mac to check the lid state (skips failover if the Mac is closed/sleeping).
    - Sends an HTTP trigger to the **Automate** app on the Android phone (`192.168.0.65`).
@@ -274,12 +274,12 @@ sudo systemctl restart ping-monitor.service
 
 | Variable | Description | Example |
 |---|---|---|
-| `TARGET_MAIN` | ISP router IP to monitor | `192.168.100.1` |
-| `CROSS_CHECK` | Secondary device on the same switch (use `` to skip) | `192.168.100.79` |
-| `TARGET_MAC` | Mac computer IP on local network | `192.168.0.173` |
+| `TARGET_MAIN` | ISP router IP to monitor (Mandatory) | `192.168.100.1` |
+| `CROSS_CHECK` | Secondary device on the same switch (Optional, leave empty to skip) | `192.168.100.79` |
+| `TARGET_MAC` | Mac computer IP on local network (Mandatory) | `192.168.0.173` |
 | `HOTSPOT_SSID` | Phone hotspot Wi-Fi name | `MyHotspot` |
 | `HOTSPOT_PASSWORD` | *(Not stored on Linux host!)* See Security section | N/A |
-| `AUTOMATE_HOST` | Android phone IP | `192.168.0.65` |
+| `AUTOMATE_HOST` | Android phone IP (Mandatory) | `192.168.0.65` |
 | `AUTOMATE_PORT` | Automate HTTP server port | `7801` |
 | `AUTOMATE_ENDPOINT` | Secret endpoint path for the trigger | `failover_abc123` |
 | `SSH_USER` | Username for SSH into the Mac | `john` |
@@ -358,16 +358,21 @@ pi_ping_monitor/
 
 ## Outage Logging
 
-The system automatically records the duration of each outage to `/var/log/ping-monitor/outages.log`. A new entry is written only after the connection is fully restored and confirmed.
+The system automatically records the duration of each outage to `/var/log/ping-monitor/outages.log`. Outage entries are written only after the connection is fully restored and confirmed.
 
-There are two possible formats for a log entry, depending on the severity of the failure:
+There are three possible types of log entries:
 
-1. **Only the ISP router failed:**
+1. **Service Lifecycle Events:**
+   The monitor records its own startup and shutdown events. This ensures a complete operational history and prevents the web dashboard from rendering an empty page on fresh installs.
+   **Format:** `YYYY-MM-DD HH:MM:SS - ping-monitor started|stopped`
+   *Example:* `2026-07-01 10:18:25 - ping-monitor started`
+
+2. **Only the ISP router failed:**
    If the ISP router goes down but the secondary device (`CROSS_CHECK`) remains pingable, it indicates a partial failure (e.g., just the router hanging).
    **Format:** `DDMMYY HH:MM:SS - HH:MM:SS`
    *Example:* `200625 14:32:10 - 14:35:47`
 
-2. **Both ISP router and secondary device failed:**
+3. **Both ISP router and secondary device failed:**
    If the ISP router goes down and the secondary device is also unreachable, it usually indicates a power loss or a failure of the switch connecting them. In this case, the IP of the unreachable secondary device is appended to the log entry.
    **Format:** `DDMMYY HH:MM:SS - HH:MM:SS <CROSS_CHECK>`
    *Example:* `200625 19:01:33 - 19:02:15 192.168.100.79`
