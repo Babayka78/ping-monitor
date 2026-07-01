@@ -177,21 +177,9 @@ EOF
     rm -rf /var/lib/ping-monitor
     rm -f /usr/local/bin/ping-monitor.sh
 
-    if [[ -n "$SSH_KEY_PATH" && -f "$SSH_KEY_PATH" ]]; then
-        if [[ "$SSH_KEY_PATH" == *ping_monitor* ]]; then
-            log "Removing generated SSH keys..."
-            rm -f "$SSH_KEY_PATH" "${SSH_KEY_PATH}.pub"
-        else
-            local rm_key
-            read -r -p "Do you want to delete the custom SSH key at $SSH_KEY_PATH? [y/N]: " rm_key
-            if [[ "$rm_key" =~ ^[Yy]$ ]]; then
-                log "Removing custom SSH key..."
-                rm -f "$SSH_KEY_PATH" "${SSH_KEY_PATH}.pub"
-            else
-                log "Skipped removing custom SSH key."
-            fi
-        fi
-    fi
+    local key_to_remove="${SSH_KEY_PATH:-$(getent passwd "$REAL_USER" | cut -d: -f6)/.ssh/id_ed25519_ping_monitor}"
+    log "Removing project SSH keys ($key_to_remove)..."
+    rm -f "$key_to_remove" "${key_to_remove}.pub"
 
     log "Checking Nginx configuration..."
     local NGINX_PORTS=""

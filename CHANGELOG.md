@@ -18,6 +18,8 @@ All notable changes to the Pi Ping Monitor project will be documented in this fi
 - Added explicit SSH timeout and keepalive safeguards for remote calls to the Mac.
 
 ### Changed
+- Enforced a strictly managed SSH key (`id_ed25519_ping_monitor`) for Mac connections, entirely removing the ability to use or accidentally delete custom user keys.
+- Updated the service startup configuration prompt for better clarity.
 - Streamlined the installation process into a single automated flow after configuration review, removing redundant interactive prompts.
 - Updated the dashboard completion output to omit the URL label if Nginx setup was skipped.
 - Used the `section` UI helper for the final "Proceed with installation" prompt.

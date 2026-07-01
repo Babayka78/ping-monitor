@@ -285,7 +285,7 @@ sudo systemctl restart ping-monitor.service
 | `AUTOMATE_PORT` | Automate HTTP server port | `7801` |
 | `AUTOMATE_ENDPOINT` | Secret endpoint path for the trigger | `failover_abc123` |
 | `SSH_USER` | Username for SSH into the Mac | `john` |
-| `SSH_KEY_PATH` | Path to the SSH private key | `/home/username/.ssh/id_ed25519_mac` |
+| `SSH_KEY_PATH` | Managed automatically (do not edit) | `/home/<username>/.ssh/id_ed25519_ping_monitor` |
 | `MAIN_INTERVAL` | Ping interval when router is up (seconds) | `5` |
 | `SIDE_INTERVAL` | Ping interval when router is down (seconds) | `30` |
 | `DEBUG` | Enable debug logging to `/var/log/ping-monitor/debug.log` | `true` |

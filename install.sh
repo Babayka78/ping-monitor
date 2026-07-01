@@ -233,7 +233,7 @@ detect_defaults() {
     CROSS_CHECK="${CROSS_CHECK:-}"
     TARGET_MAC="${TARGET_MAC:-}"
     SSH_USER="${SSH_USER:-}"
-    SSH_KEY_PATH="${SSH_KEY_PATH:-$REAL_HOME/.ssh/id_ed25519_ping_monitor}"
+    SSH_KEY_PATH="$REAL_HOME/.ssh/id_ed25519_ping_monitor"
     HOTSPOT_SSID="${HOTSPOT_SSID:-}"
     HOTSPOT_PASSWORD="${HOTSPOT_PASSWORD:-}"
     AUTOMATE_HOST="${AUTOMATE_HOST:-}"
@@ -428,23 +428,6 @@ prompt_nonempty() {
     done
 }
 
-# Prompts for the SSH key path, allowing filename-only input and reconstructing absolute paths
-prompt_ssh_key_path() {
-    local default_key_name
-    default_key_name="$(basename "$SSH_KEY_PATH")"
-    local key_name
-    key_name="$(prompt_nonempty 'SSH Key Path' 'SSH_KEY_PATH' "$default_key_name")"
-    
-    if [[ "$key_name" != "$default_key_name" ]]; then
-        if [[ "$key_name" == */* ]]; then
-            echo "$key_name"
-        else
-            echo "$REAL_HOME/.ssh/$key_name"
-        fi
-    else
-        echo "$SSH_KEY_PATH"
-    fi
-}
 
 # Guides the user through setting up all required IP addresses and credentials
 prompt_config() {
@@ -466,7 +449,6 @@ prompt_config() {
     CROSS_CHECK="$(prompt_optional_ipv4 'Secondary IP' 'CROSS_CHECK' "$CROSS_CHECK" '192.168.100.79')"
     TARGET_MAC="$(prompt_ipv4 'Mac Computer IP' 'TARGET_MAC' "$TARGET_MAC" '192.168.0.173')"
     SSH_USER="$(prompt_nonempty 'Mac SSH Username' 'SSH_USER' "$SSH_USER")"
-    SSH_KEY_PATH="$(prompt_ssh_key_path)"
     HOTSPOT_SSID="$(prompt_nonempty 'Phone Hotspot SSID' 'HOTSPOT_SSID' "$HOTSPOT_SSID")"
     HOTSPOT_PASSWORD="$(prompt_password 'Phone Hotspot Password' 'HOTSPOT_PASSWORD' "$HOTSPOT_PASSWORD")"
     AUTOMATE_HOST="$(prompt_ipv4 'Android Phone IP' 'AUTOMATE_HOST' "$AUTOMATE_HOST" '192.168.0.65')"
@@ -644,11 +626,11 @@ install_service() {
     chmod 644 "$SERVICE_FILE"
     systemctl daemon-reload
     
-    section "🚀 INSTALLATION ALMOST COMPLETE. START SERVICE?"
+    section "🚀 INSTALLATION ALMOST COMPLETE. CONFIGURE SERVICE STARTUP"
     local enable_now start_now
     read -r -p "Enable the ping-monitor service on boot? [Y/n]: " enable_now
     enable_now="${enable_now:-Y}"
-    read -r -p "Start the ping-monitor service now? [Y/n]: " start_now
+    read -r -p "Start the ping-monitor service now for this session? [Y/n]: " start_now
     start_now="${start_now:-Y}"
 
     if [[ "$enable_now" =~ ^[Yy]$ ]]; then
