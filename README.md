@@ -221,6 +221,8 @@ If you want to skip typing credentials manually, you can create a `config.env` f
 > During the interactive prompts, any default value that was successfully loaded from a local `./config.env` file will be marked with an asterisk `*` (e.g., `Mac Computer IP (TARGET_MAC)                [192.168.0.173*]: `). This helps you distinguish your previously saved pre-fill settings from dynamically generated script defaults.
 > 
 > **Re-installations:** If an existing system configuration is detected (`/etc/ping-monitor/config.env`), the installer will use it instead of the local file. The asterisk markers are hidden during re-installations to keep the interface clean. Furthermore, because the Linux host never stores the Mac's hotspot password locally, you will always be required to re-enter it when re-installing.
+> 
+> **Quick Update:** During a re-installation, if you decline to reconfigure the existing settings, the installer will offer a "quick update" option. This allows you to rapidly deploy a new version of the `ping-monitor.sh` script and restart the service without proceeding through the interactive configuration menus.
 
 > [!WARNING]
 > This local file is used **only** to pre-fill the installer. It is not used by the running systemd service. If you put your `HOTSPOT_PASSWORD` in this file, remember that it is stored in plain text here, so you should delete this file after installation.

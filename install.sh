@@ -934,8 +934,19 @@ main() {
         local reconfigure
         read -r -p "Do you want to reconfigure these settings? [y/N]: " reconfigure
         if [[ ! "$reconfigure" =~ ^[Yy]$ ]]; then
-            log "Exiting without making changes."
-            exit 0
+            local just_update
+            read -r -p "Do you want to update the script and restart the service without changing settings? [y/N]: " just_update
+            if [[ "$just_update" =~ ^[Yy]$ ]]; then
+                log "Updating script and restarting service..."
+                install -m 755 "$SCRIPT_DIR/ping-monitor.sh" "$INSTALL_BIN"
+                systemctl daemon-reload
+                systemctl restart "$SERVICE_NAME"
+                log "Service updated and restarted successfully."
+                exit 0
+            else
+                log "Exiting without making changes."
+                exit 0
+            fi
         fi
     fi
 

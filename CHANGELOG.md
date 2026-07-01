@@ -5,6 +5,7 @@ All notable changes to the Pi Ping Monitor project will be documented in this fi
 ## [Unreleased]
 
 ### Added
+- Added a quick update option to the installer: when declining reconfiguration during re-installation, users can now choose to simply update the script and restart the service without changing environment settings.
 - Added a restricted macOS helper script (`ping-monitor-helper.sh`) that is deployed to the Mac and used for all supported remote actions.
 - Added dedicated ED25519 SSH key generation and deployment for monitor-to-Mac communication.
 - Added reusable installer UI helpers for cleaner interactive output.
